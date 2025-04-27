@@ -119,7 +119,7 @@ def get_list_of_car_services() -> dict:
             "error_message": str(e),
         }
 
-def create_appointment_request(serviceIds: list[str], dateTime: str, vehicleId:str) -> dict:
+def create_appointment_request(serviceIds: list[str], dateTime: str, vehicleId:str, shop: str) -> dict:
     """Creates an appointment request for a specified  serviceSubCategory at a given date and time, using the get_list_of_car_services function to get the list of services.
 
     Args:
@@ -162,7 +162,7 @@ def create_appointment_request(serviceIds: list[str], dateTime: str, vehicleId:s
             "error_message": str(e),
         }
 
-def get_list_of_cars() -> dict:
+def get_list_of_cars(user : str) -> dict:
     """Retrieves the list of cars for a user.
 
     Args:
@@ -172,7 +172,7 @@ def get_list_of_cars() -> dict:
         dict: status and list of cars or error message.
     """
     try:
-        url = f"{base_url}vehicle/list/66b5b943ea4fd0b66e774ccb"
+        url = f"{base_url}vehicle/list/{user}"
         response = requests.get(url, timeout=100, headers={"Authorization": jwt_token})
 
         if response.status_code != 200:
@@ -193,10 +193,87 @@ def get_list_of_cars() -> dict:
             "status": "error",
             "error_message": str(e),
         }
+
+def get_list_of_shops_with_searching(search : str) -> dict:
+    """Retrieve list of all shops when searching is required
+    Args :
+         search (str):  the shop name
+    Returns:
+        dict: status and result or error message.
+    """
+    try:
+        url = f"http://172.105.58.76:4504/v4/api/shop/list-for-customer?search={search}&page=1&limit=50"
+        response = requests.get(url, timeout=1000) 
         
+        response_data = response.json()
+
         
+        if response.status_code != 200:
+            return {
+                "status": "error",
+                "error_message": f"Failed to get shop.",
+                "response": response.json(),
+            }
+        return {
+            "status" :"success",
+            "data": [{"shopName": shop["shopName"], _id : shop["_id"]} for shop in response_data.get("data", [])]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_message": str(e),
+        }
+
+def get_list_of_shops_without_searching() -> dict:
+    """Retrieve list of all shops.
+    Returns:
+        dict: status and result or error message.
+    """
+    try:
+        url = "http://172.105.58.76:4504/v4/api/shop/list-for-customer?page=1&limit=50"
+        response = requests.get(url, timeout=10)  # reduced timeout to 10 seconds
+        
+        if response.status_code != 200:
+            return {
+                "status": "error",
+                "error_message": "Failed to get shop.",
+                "response": response.json(),
+            }
+        
+        response_data = response.json()
+
+        return {
+            "status": "success",
+            "data": [{"shopName": shop["shopName"], _id : shop["_id"]} for shop in response_data.get("data", [])]
+        }
+    
+    except requests.RequestException as req_err:
+        return {
+            "status": "error",
+            "error_message": f"Request failed: {str(req_err)}",
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "error_message": f"Unexpected error: {str(e)}",
+        }
+
+
+     
 instruction = """
     You are a car service appointment agent.
+    <Get list of shops without searching>
+        - use the functions get_list_of_shops_without_searching()
+        - Get list of shops
+        - Use this function to find the list of shops
+    </Get list of shops without searching>
+    
+    <Get list of shops with searching>
+        - use the functions get_list_of_shops_with_searching(shopName)
+        - Get list of shops
+        - Use this function to find the list of shops with the search parameter
+    </Get list of shops with searching>
 
     <Understand User Request>
         - First, analyze the user's initial message carefully.
@@ -221,7 +298,6 @@ instruction = """
         - Use the function `get_list_of_car_services(subcategory_id)` to fetch available services.
         - Match the user's requested service with available services.
         - Select the correct `serviceId(s)`.
-
     </Get Service List>
 
     <Understand Appointment Timing>
@@ -237,6 +313,7 @@ instruction = """
             1. Selected `serviceId`(s)
             2. Formatted appointment time (dateTime)
             3. Vehicle ID
+            4. Shop Id
         - Use the function `create_appointment_request(serviceIds, dateTime, vehicleId)` to book the appointment.
     </Create Appointment>
 
@@ -264,5 +341,5 @@ root_agent = Agent(
         "Agent to answer questions about car services offered."
     ),
     instruction=instruction,
-    tools=[get_weather, get_list_of_car_services, create_appointment_request,get_list_of_cars, get_current_day_date_and_time],
+    tools=[get_weather, get_list_of_car_services, create_appointment_request,get_list_of_cars, get_current_day_date_and_time,get_list_of_shops_without_searching,get_list_of_shops_with_searching],
 )
